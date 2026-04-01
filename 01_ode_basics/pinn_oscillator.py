@@ -22,9 +22,13 @@ PINN idea:
     the physics residual.
 
 Run:
-    python pinn_oscillator.py
+    uv run python pinn_oscillator.py
+    mlflow ui   # then open http://localhost:5000
 """
 
+import mlflow
+mlflow.set_tracking_uri("sqlite:///mlflow.db")
+import mlflow.pytorch
 import torch
 import torch.nn as nn
 import numpy as np
@@ -164,6 +168,14 @@ def train(n_collocation=200, n_epochs=5000, lr=1e-3):
         scheduler.step()
 
         history.append(loss.item())
+
+        mlflow.log_metrics({
+            "loss":  loss.item(),
+            "L_ode": L_ode.item(),
+            "L_ic":  L_ic.item(),
+            "lr":    scheduler.get_last_lr()[0],
+        }, step=epoch)
+
         if epoch % 500 == 0:
             print(f"Epoch {epoch:5d} | loss={loss.item():.2e}  "
                   f"L_ode={L_ode.item():.2e}  L_ic={L_ic.item():.2e}")
@@ -184,7 +196,6 @@ def evaluate(model):
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
-    # Trajectory comparison
     ax = axes[0]
     ax.plot(t_np, x_true, label="Analytical", lw=2)
     ax.plot(t_np, x_pred, "--", label="PINN", lw=2)
@@ -194,7 +205,6 @@ def evaluate(model):
     ax.legend()
     ax.grid(True, alpha=0.3)
 
-    # Error
     ax = axes[1]
     ax.semilogy(t_np, np.abs(x_pred - x_true))
     ax.set_xlabel("t [s]")
@@ -205,10 +215,46 @@ def evaluate(model):
     plt.tight_layout()
     plt.savefig("oscillator_result.png", dpi=150)
     plt.show()
-    print(f"\nMax absolute error: {np.max(np.abs(x_pred - x_true)):.4f} m")
+    plt.close()
+
+    max_err = float(np.max(np.abs(x_pred - x_true)))
+    print(f"\nMax absolute error: {max_err:.4f} m")
+    return max_err
 
 
+# ──────────────────────────────────────────────────
+# 7. Main
+# ──────────────────────────────────────────────────
 if __name__ == "__main__":
+    N_COLLOCATION = 400
+    N_EPOCHS      = 5000
+    LR            = 1e-3
+    HIDDEN_LAYERS_OPTIONS = [2,4,6]
+    HIDDEN_SIZE   = 32
+
     torch.manual_seed(42)
-    model, history = train(n_collocation=200, n_epochs=5000, lr=1e-3)
-    evaluate(model)
+
+    mlflow.set_experiment("pinn-oscillator")
+    for HIDDEN_LAYERS in HIDDEN_LAYERS_OPTIONS:
+        with mlflow.start_run():
+            mlflow.log_params({
+                "m": M, "c": C, "k": K, "T": T,
+                "n_collocation": N_COLLOCATION,
+                "n_epochs":      N_EPOCHS,
+                "lr":            LR,
+                "hidden_layers": HIDDEN_LAYERS,
+                "hidden_size":   HIDDEN_SIZE,
+                "optimizer":     "Adam",
+                "scheduler":     "StepLR(step=2000, gamma=0.5)",
+                # derived physics
+                "omega_n": round(omega_n, 4),
+                "zeta":    round(zeta, 4),
+            })
+
+            model, history = train(N_COLLOCATION, N_EPOCHS, LR)
+
+            max_err = evaluate(model)
+            mlflow.log_metric("max_abs_error", max_err)
+
+            mlflow.log_artifact("oscillator_result.png")
+            mlflow.pytorch.log_model(model, "model")
