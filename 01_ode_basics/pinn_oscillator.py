@@ -38,7 +38,7 @@ import matplotlib.pyplot as plt
 # 1. Physical parameters
 # ──────────────────────────────────────────────────
 M   = 1.0    # mass [kg]
-C   = 0.4    # damping coefficient [N·s/m]
+C   = 2    # damping coefficient [N·s/m]
 K   = 4.0    # spring stiffness [N/m]
 T   = 10.0   # simulation horizon [s]
 
@@ -136,8 +136,9 @@ def ic_loss(model, t0):
 # ──────────────────────────────────────────────────
 # 5. Training
 # ──────────────────────────────────────────────────
-def train(n_collocation=200, n_epochs=5000, lr=1e-3):
-    model = PINN(hidden_layers=4, hidden_size=32)
+def train(n_collocation=200, n_epochs=5000, lr=1e-3, 
+          hidden_layers=4, hidden_size = 32):
+    model = PINN(hidden_layers=hidden_layers, hidden_size=hidden_size)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=2000, gamma=0.5)
 
@@ -214,7 +215,8 @@ def evaluate(model):
 
     plt.tight_layout()
     plt.savefig("oscillator_result.png", dpi=150)
-    plt.show()
+    plt.show(block=False)
+    plt.pause(1)
     plt.close()
 
     max_err = float(np.max(np.abs(x_pred - x_true)))
@@ -243,7 +245,7 @@ if __name__ == "__main__":
                 "n_epochs":      N_EPOCHS,
                 "lr":            LR,
                 "hidden_layers": HIDDEN_LAYERS,
-                "hidden_size":   HIDDEN_SIZE,
+                "hidden_size":   HIDDEN_LAYERS,
                 "optimizer":     "Adam",
                 "scheduler":     "StepLR(step=2000, gamma=0.5)",
                 # derived physics
@@ -251,7 +253,8 @@ if __name__ == "__main__":
                 "zeta":    round(zeta, 4),
             })
 
-            model, history = train(N_COLLOCATION, N_EPOCHS, LR)
+            model, history = train(N_COLLOCATION, N_EPOCHS, LR,
+                                   HIDDEN_LAYERS, HIDDEN_LAYERS)
 
             max_err = evaluate(model)
             mlflow.log_metric("max_abs_error", max_err)

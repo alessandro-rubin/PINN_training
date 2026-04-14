@@ -11,3 +11,5 @@ wheels/
 
 mlruns/
 mlflow.db
+mlflow.db-journal
+oscillator_result.png
