@@ -13,3 +13,4 @@ mlruns/
 mlflow.db
 mlflow.db-journal
 oscillator_result.png
+heat_result.png
