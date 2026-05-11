@@ -240,7 +240,7 @@ def evaluate(model):
 
     plt.suptitle("1D Heat Equation — PINN vs Analytical", fontsize=13)
     plt.tight_layout()
-    plt.savefig("heat_result.png", dpi=150)
+    plt.savefig("media/heat_result.png", dpi=150)
     plt.show(block=False)
     plt.pause(1)
     plt.close()
@@ -304,5 +304,5 @@ if __name__ == "__main__":
                 "mean_abs_error": mean_err,
             })
 
-            mlflow.log_artifact("heat_result.png")
+            mlflow.log_artifact("media/heat_result.png")
             mlflow.pytorch.log_model(model, "model")

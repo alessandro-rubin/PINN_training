@@ -214,7 +214,7 @@ def evaluate(model):
     ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig("oscillator_result.png", dpi=150)
+    plt.savefig("media/oscillator_result.png", dpi=150)
     plt.show(block=False)
     plt.pause(1)
     plt.close()
@@ -259,5 +259,5 @@ if __name__ == "__main__":
             max_err = evaluate(model)
             mlflow.log_metric("max_abs_error", max_err)
 
-            mlflow.log_artifact("oscillator_result.png")
+            mlflow.log_artifact("media/oscillator_result.png")
             mlflow.pytorch.log_model(model, "model")

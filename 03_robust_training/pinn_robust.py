@@ -358,7 +358,7 @@ def evaluate(model, tag: str):
 
     plt.suptitle(f"1D Heat Equation — {tag}", fontsize=13)
     plt.tight_layout()
-    fname = f"result_{tag}.png"
+    fname = f"media/result_{tag}.png"
     plt.savefig(fname, dpi=150)
     plt.show(block=False)
     plt.pause(1)
@@ -370,7 +370,7 @@ def evaluate(model, tag: str):
     return max_err, mean_err, fname
 
 
-def plot_loss_curves(histories: dict, fname="loss_curves.png"):
+def plot_loss_curves(histories: dict, fname="media/loss_curves.png"):
     """
     Technique 1 — Loss diagnostics.
 
