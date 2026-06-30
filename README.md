@@ -12,7 +12,7 @@ focused on powertrain / embedded digital twin applications.
 | 03 | [Robust Training](03_robust_training/) | 1D Heat Equation (revisited) | Hard constraints, adaptive loss weights, L-BFGS |
 | 04 | [Burgers' Equation](04_burgers/) | Nonlinear PDE | Shock capturing, viscosity, FD reference, L-BFGS |
 | 05 | [Inverse Problem](05_inverse_problem/) | Parameter ID from data | Data loss + physics loss, softplus constraints, identifying c and k |
-| 06 | Hybrid Physics+Data | Residual dynamics | Neural ODE, grey-box modeling |
+| 06 | [Hybrid Physics+Data](06_hybrid_greybox/) | Duffing oscillator (residual dynamics) | Neural ODE, grey-box UDE, differentiable RK4, residual recovery |
 
 ## Setup
 
