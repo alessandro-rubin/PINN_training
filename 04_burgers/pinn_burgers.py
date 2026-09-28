@@ -173,20 +173,33 @@ def sample_uniform(n):
     return x, t
 
 
-def rar_refine(model, x_f, t_f, n_add, n_candidates):
+def rar_refine(model, x_f, t_f, n_add, n_candidates, k=1.0, c=1.0):
     """
-    Residual-based Adaptive Refinement (greedy variant, Lu et al. 2021).
+    Residual-based Adaptive Refinement with a residual-based density (RAR-D,
+    Wu et al. 2023).
 
     1. Draw n_candidates uniform random points.
     2. Evaluate |residual| on all of them.
-    3. Append the n_add points with the largest residual to the training set.
+    3. Sample n_add of them (without replacement) with probability
+
+           p(x)  proportional to  |r(x)|^k / mean(|r|^k) + c
+
+       and append them to the training set.
+
+    k sharpens the density (k -> inf recovers the greedy top-k RAR of
+    Lu et al. 2021); c > 0 keeps a uniform floor so that some points still
+    land away from the shock. Greedy top-k piles hundreds of almost identical
+    points onto the shock line, which over-weights it in the mean-squared loss
+    and can destabilise training; sampling from a density avoids that.
 
     Returns the enlarged collocation set and the mean candidate residual
     before refinement (a cheap, unbiased estimate of the domain-wide residual).
     """
     x_c, t_c = sample_uniform(n_candidates)
     r        = residual_magnitude(model, x_c, t_c).squeeze(1)
-    idx      = torch.topk(r, n_add).indices
+    rk       = r.pow(k)
+    p        = rk / rk.mean() + c
+    idx      = torch.multinomial(p, n_add, replacement=False)
     x_new    = torch.cat([x_f.detach(), x_c[idx]]).requires_grad_(True)
     t_new    = torch.cat([t_f.detach(), t_c[idx]]).requires_grad_(True)
     return x_new, t_new, r.mean().item()
@@ -229,6 +242,8 @@ class Config:
     n_collocation_init: int = 6000    # < final only for RAR
     rar_every: int = 1000             # Adam steps between refinements
     rar_candidates: int = 50_000
+    rar_k: float = 1.0                # RAR-D density exponent
+    rar_c: float = 1.0                # RAR-D uniform floor
     n_adam: int = 10_000
     n_lbfgs: int = 50                 # outer L-BFGS steps (x max_iter each)
     lbfgs_max_iter: int = 50
@@ -286,8 +301,8 @@ def train(cfg: Config, grid: EvalGrid):
 
         if (use_rar and step % cfg.rar_every == 0
                 and x_f.shape[0] + n_per_add <= cfg.n_collocation_final):
-            x_f, t_f, r_mean = rar_refine(model, x_f, t_f,
-                                          n_per_add, cfg.rar_candidates)
+            x_f, t_f, r_mean = rar_refine(model, x_f, t_f, n_per_add,
+                                          cfg.rar_candidates, cfg.rar_k, cfg.rar_c)
             mlflow.log_metric("candidate_mean_residual", r_mean, step=step)
 
     # — L-BFGS polish phase —

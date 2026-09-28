@@ -51,14 +51,23 @@ Two numerical details worth understanding:
 ## New technique: Residual-based Adaptive Refinement (RAR)
 
 Fixed collocation points are a *static* guess about where the physics is difficult.
-RAR makes this guess adaptive (Lu et al., 2021):
+RAR makes this guess adaptive (Lu et al., 2021; Wu et al., 2023):
 
 ```
 every rar_every Adam steps:
     draw 50 000 random candidate points
-    evaluate |r(x, t)| = |u_t + u u_x - ν u_xx| on all of them
-    add the n_add candidates with the largest |r| to the collocation set
+    evaluate |r(x, t)| = |u_t + u u_x - nu u_xx| on all of them
+    sample n_add candidates with probability  p ~ |r|^k / mean(|r|^k) + c
+    append them to the collocation set
 ```
+
+This is the **RAR-D** variant (residual-based *density*), with `k = 1, c = 1` as the
+default recommended by Wu et al. (2023). The original greedy RAR simply takes the
+`n_add` candidates with the largest `|r|` (the limit `k -> inf`). On Burgers that
+places hundreds of almost identical points on the shock line, which over-weights it
+in the mean-squared loss and, in our tests, made training unstable. Sampling from a
+density still concentrates points at the shock, but spreads them out and keeps a
+uniform floor (`c`) elsewhere.
 
 Evaluating the residual is cheap (no backward pass through the weights), so
 the candidate pool can be 10x larger than the training set.
@@ -72,7 +81,7 @@ the optimiser schedule (10 000 Adam steps with cosine decay, then L-BFGS) and th
 | Run | Initial points | Refinement | Final points |
 |-----|----------------|------------|--------------|
 | `uniform` | 6 000 uniform | none | 6 000 |
-| `rar`     | 3 000 uniform | 9 rounds × 333 worst-residual points | 5 997 |
+| `rar`     | 3 000 uniform | 9 rounds × 333 RAR-D points | 5 997 |
 
 Hard constraint used here (compare with module 03):
 
@@ -134,9 +143,9 @@ mlflow ui --backend-store-uri sqlite:///mlflow.db   # http://localhost:5000
    which `ν` does the uniform run break down? Does RAR push that limit?
 2. **Soft vs hard constraints.** Replace `BurgersPINN.forward` with a raw network plus
    IC/BC penalty terms (module 03 `PINNSoft`). How does `rel_l2` change?
-3. **RAR-D.** Instead of the greedy top-k, *sample* candidates with probability
-   proportional to `|r|^k / mean(|r|^k) + c` (Wu et al., 2023). This avoids
-   clustering many almost identical points and keeps some exploration elsewhere.
+3. **Greedy vs density.** Set `rar_k` very large and `rar_c = 0` (close to greedy
+   top-k) and compare with the default `k = 1, c = 1`. Also try `k = 2, c = 0`.
+   Watch `rel_l2` right after each refinement step in MLflow.
 4. **Fixed-budget resampling.** Keep the number of points constant and *replace*
    the lowest-residual points instead of adding new ones. Compare cost and accuracy.
 5. **Causality.** Plot `rel_l2` restricted to `t < 0.3` and `t > 0.3` separately.
