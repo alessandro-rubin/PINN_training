@@ -11,8 +11,8 @@ focused on powertrain / embedded digital twin applications.
 | 02 | [1D Heat Equation](02_heat_equation/) | Parabolic PDE | 2D input, Dirichlet BCs, weighted loss terms — [next steps](02_heat_equation/NEXT_STEPS.md) |
 | 03 | [Robust Training](03_robust_training/) | 1D Heat Equation (revisited) | Hard constraints, adaptive loss weights, L-BFGS |
 | 04 | [Burgers' Equation](04_burgers/) | Nonlinear PDE, viscous shock | Residual-based adaptive refinement (RAR), relative L2 vs exact reference |
-| 05 | Inverse Problem | Parameter ID from data | Data loss + physics loss, estimating k/c |
-| 06 | Hybrid Physics+Data | Residual dynamics | Neural ODE, grey-box modeling |
+| 05 | [Inverse Problem](05_inverse_problem/) | Parameter ID from data | Data loss + physics loss, softplus constraints, identifying c and k |
+| 06 | [Hybrid Physics+Data](06_hybrid_greybox/) | Duffing oscillator (residual dynamics) | Neural ODE, grey-box UDE, differentiable RK4, residual recovery |
 
 ## Setup
 

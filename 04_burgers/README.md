@@ -15,6 +15,11 @@ left. With the initial condition `-sin(πx)`, the fluid on both sides moves *tow
 `x = 0`, the wave front steepens and, around `t ≈ 1/π ≈ 0.32`, forms a **viscous
 shock**: a transition from `u ≈ +1` to `u ≈ -1` over a very thin layer.
 
+In powertrain terms it is the prototype for any convection-dominated transport:
+pressure-wave steepening in an exhaust manifold, 1D gas dynamics in an intake
+runner, or fuel-film advection, wherever a quantity is carried by its own velocity
+field and steep fronts emerge.
+
 ### How thin is the shock?
 
 For a stationary shock between `u = +1` and `u = -1` the exact profile is
