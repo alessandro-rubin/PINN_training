@@ -222,8 +222,10 @@ class EvalGrid:
         self.t_flat = torch.tensor(self.TT.ravel(), dtype=torch.float32).unsqueeze(1)
 
     def predict(self, model):
+        dtype = next(model.parameters()).dtype
         with torch.no_grad():
-            return model(self.x_flat, self.t_flat).numpy().reshape(self.XX.shape)
+            u = model(self.x_flat.to(dtype), self.t_flat.to(dtype))
+        return u.float().numpy().reshape(self.XX.shape)
 
     def errors(self, model):
         u_pred = self.predict(model)
@@ -305,8 +307,18 @@ def train(cfg: Config, grid: EvalGrid):
                                           cfg.rar_candidates, cfg.rar_k, cfg.rar_c)
             mlflow.log_metric("candidate_mean_residual", r_mean, step=step)
 
-    # — L-BFGS polish phase —
-    print(f"  L-BFGS polish ({cfg.n_lbfgs} x {cfg.lbfgs_max_iter} iterations)")
+    # — L-BFGS polish phase (float64) —
+    # In float32 the strong-Wolfe line search stalls once the loss is small:
+    # the loss decrease along the search direction drops below float32
+    # resolution, the step is rejected and every outer call exits after a
+    # single iteration. Switching the model and the points to float64 for the
+    # polish is standard PINN practice and costs roughly 2x per iteration.
+    model = model.double()
+    x_f   = x_f.detach().double().requires_grad_(True)
+    t_f   = t_f.detach().double().requires_grad_(True)
+
+    print(f"  L-BFGS polish in float64 "
+          f"(up to {cfg.n_lbfgs} x {cfg.lbfgs_max_iter} iterations)")
     lbfgs = torch.optim.LBFGS(
         model.parameters(),
         lr=1.0,
@@ -323,16 +335,22 @@ def train(cfg: Config, grid: EvalGrid):
         loss.backward()
         return loss
 
+    n_iter_prev = 0
     for k in range(1, cfg.n_lbfgs + 1):
-        loss = lbfgs.step(closure).item()
-        step = cfg.n_adam + k * cfg.lbfgs_max_iter
+        loss   = lbfgs.step(closure).item()
+        n_iter = lbfgs.state[lbfgs.param_groups[0]["params"][0]]["n_iter"]
         if not np.isfinite(loss):
             print("  L-BFGS diverged, stopping polish early")
             break
-        rel_l2 = log(step, loss, 0.0)
+        if n_iter == n_iter_prev:
+            print(f"  L-BFGS converged after {n_iter} iterations")
+            break
+        n_iter_prev = n_iter
+        rel_l2 = log(cfg.n_adam + n_iter, loss, 0.0)
         if k % 10 == 0:
-            print(f"  lbfgs {k:5d} | L_pde={loss:.2e}  rel_l2={rel_l2:.2e}")
+            print(f"  lbfgs {n_iter:5d} | L_pde={loss:.2e}  rel_l2={rel_l2:.2e}")
 
+    model = model.float()
     return model, history, (x_f.detach().numpy(), t_f.detach().numpy())
 
 
