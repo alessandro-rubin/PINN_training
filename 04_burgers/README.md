@@ -101,19 +101,53 @@ Metrics logged every 250 steps: `L_pde`, `rel_l2` and `max_abs_err` against the
 Cole-Hopf reference on a 257 × 101 grid, `n_collocation`, and (RAR only)
 `candidate_mean_residual`, an unbiased estimate of the domain-average residual.
 
+## Results (seed 1234, CPU, about 10 min for both runs)
+
+| Run | rel L2 after Adam | final rel L2 | final max abs error |
+|-----|-------------------|--------------|---------------------|
+| `uniform` | 1.6e-2 | 2.8e-3 | 4.0e-2 |
+| `rar`     | 1.9e-2 | 1.7e-3 | 1.7e-2 |
+
+For comparison, Raissi et al. (2019) report a relative L2 error of about 7e-4 on the
+same problem with 10 000 points and a much longer L-BFGS run.
+
+How to read these numbers honestly:
+
+- **This is one seed.** During the L-BFGS phase the uniform run's rel L2 oscillates
+  between about 1.8e-3 and 3e-3, so the rel L2 gap is close to run-to-run noise.
+  The **max error** gap (2.4x) is more robust: the max error sits on the shock, which
+  is exactly where RAR-D adds points. A proper comparison needs several seeds
+  (exercise 6).
+- **RAR hurts before it helps.** Each refinement adds high-residual points, and
+  `rel_l2` jumps right after it (visible in `convergence.png` around steps 2000-5000).
+  RAR only overtakes uniform in the second half of the Adam phase.
+- **The float64 L-BFGS polish is the biggest single lever.** It takes the uniform run
+  from 1.6e-2 to 2.8e-3 (roughly 6x). In float32 the same L-BFGS configuration
+  stalls completely (see below).
+
 ## What to look for
 
-- **`residual_and_points.png`**: in the `rar` panel the added points pile up along
-  the shock line `x = 0, t > 0.3`. In the `uniform` panel the residual is largest
-  exactly there.
+- **`residual_and_points.png`**: with `k = 1, c = 1` the clustering is mild. The RAR
+  point cloud thickens around `x = 0` for `t > 0.3`, while most points stay spread
+  out. In the `uniform` panel the residual peaks exactly on the shock line.
 - **Time slices in `result_*.png`**: the error is concentrated at the shock; away
   from it both runs are accurate. A smeared or offset shock is the typical failure.
-- **`L_pde` vs `rel_l2` in `convergence.png`**: the training loss is measured on
-  *different point sets* in the two runs (RAR deliberately adds hard points, which
-  makes its loss jump up after each refinement). Only `rel_l2` is a fair comparison.
+- **`L_pde` vs `rel_l2` in `convergence.png`**: the RAR run ends with a *higher*
+  training loss but a *lower* error. The two losses are measured on different point
+  sets (RAR deliberately adds hard points), so only `rel_l2` is a fair comparison.
   This is a general lesson: **a low PINN training loss is not a certificate of
   accuracy**; in real applications without a reference, check the residual on fresh
   points.
+
+## Pitfall: L-BFGS in float32
+
+In float32, once the loss is around 1e-4, the strong-Wolfe line search can no longer
+resolve a decrease along the search direction: the step is rejected and every
+`lbfgs.step()` call exits after a single iteration. The loss stays frozen, and
+nothing warns you. The script therefore switches the model and the collocation
+points to float64 for the polish (`model.double()`). To check this on your own
+problems, read `lbfgs.state[param]["n_iter"]`: if it grows by 1 per outer step
+instead of by `max_iter`, the optimiser has stalled.
 
 ## New concepts vs module 03
 
@@ -124,13 +158,14 @@ Cole-Hopf reference on a 257 × 101 grid, `n_collocation`, and (RAR only)
 | Collocation | fixed uniform | fixed uniform vs. residual-adaptive (RAR) |
 | Reference | closed form | Cole-Hopf + Gauss-Hermite quadrature |
 | Error metric | max / mean abs error | relative L2 (standard in the literature) |
+| L-BFGS precision | float32 | float64 (float32 stalls, see pitfall) |
 | Input scaling | none | inputs mapped to `[-1, 1]` |
 
 ## Run
 
 ```bash
 cd 04_burgers
-uv run python pinn_burgers.py            # full runs, several minutes on a laptop CPU
+uv run python pinn_burgers.py            # full runs, about 10 min on a 4-core CPU
 uv run python pinn_burgers.py --quick    # smoke test, results not meaningful
 mlflow ui --backend-store-uri sqlite:///mlflow.db   # http://localhost:5000
 ```
@@ -156,6 +191,8 @@ mlflow ui --backend-store-uri sqlite:///mlflow.db   # http://localhost:5000
 5. **Causality.** Plot `rel_l2` restricted to `t < 0.3` and `t > 0.3` separately.
    PINNs often fit late times before early ones are correct; see Wang et al. (2024)
    on causal training.
+6. **Seeds.** Repeat both runs with 5 seeds and report mean and spread of the final
+   `rel_l2` and max error. Is the RAR advantage statistically meaningful?
 
 ## References
 
